@@ -31,6 +31,8 @@ A **fully functional** Model Context Protocol (MCP) server that provides YouTube
 
 ## Installation
 
+### Local Installation
+
 ```bash
 # Install dependencies
 uv pip install -e .
@@ -38,6 +40,30 @@ uv pip install -e .
 # For development
 uv pip install -e ".[dev]"
 ```
+
+### 🐳 Docker Installation (Recommended for Production)
+
+```bash
+# Build the Docker image
+docker build -t yttranscript-mcp:latest .
+
+# Run with docker-compose (recommended)
+docker-compose up -d yttranscript-mcp
+
+# Or run directly
+docker run -d --name yttranscript-mcp -p 8000:8000 yttranscript-mcp:latest
+
+# Test the containerized server
+curl http://localhost:8000/health
+```
+
+**Docker Features:**
+- ✅ **Multi-stage Alpine build** optimized for production (~200MB)
+- ✅ **Security hardened** with non-root user and resource limits
+- ✅ **FFmpeg included** for yt-dlp compatibility
+- ✅ **Health checks** and monitoring built-in
+- ✅ **Both STDIO and HTTP transport** modes supported
+- ✅ **Development profile** with auto-reload and volume mounts
 
 ## Usage
 
@@ -63,6 +89,7 @@ TRANSPORT=http python src/server.py
 
 The server infrastructure has been thoroughly validated:
 
+#### Local Testing
 ```bash
 # Test health endpoint (HTTP transport)
 curl http://localhost:8000/health
@@ -78,6 +105,21 @@ mcp call get_available_languages --params '{"video_id":"VIDEO_ID"}' .venv/bin/py
 
 # Interactive testing
 mcp shell .venv/bin/python src/server.py
+```
+
+#### Docker Testing
+```bash
+# Test health endpoint
+curl http://localhost:8000/health
+
+# Test MCP tools in container
+mcp tools docker run --rm -i yttranscript-mcp:latest python src/server.py
+
+# Test specific tool
+mcp call get_available_languages --params '{"video_id":"9bZkp7q19f0"}' docker run --rm -i yttranscript-mcp:latest python src/server.py
+
+# Development mode with auto-reload
+docker-compose --profile dev up yttranscript-mcp-dev
 ```
 
 ### ⚠️ Known Limitations & Rate Limiting

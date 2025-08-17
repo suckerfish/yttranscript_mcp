@@ -74,6 +74,47 @@ curl http://localhost:8000/health
 # ✅ Short URLs: https://youtu.be/KeRsFAiJGww
 ```
 
+### 🐳 Docker Deployment (NEW - August 2025)
+
+**Quick Start with Docker:**
+```bash
+# Build the Docker image
+docker build -t yttranscript-mcp:latest .
+
+# Run with docker-compose (recommended)
+docker-compose up -d yttranscript-mcp
+
+# Or run directly
+docker run -d --name yttranscript-mcp -p 8000:8000 yttranscript-mcp:latest
+
+# Test health endpoint
+curl http://localhost:8000/health
+
+# Test MCP tools in container
+mcp tools docker run --rm -i yttranscript-mcp:latest python src/server.py
+
+# Test specific tool
+mcp call get_available_languages --params '{"video_id":"9bZkp7q19f0"}' docker run --rm -i yttranscript-mcp:latest python src/server.py
+```
+
+**Docker Features:**
+- ✅ **Multi-stage Alpine build** for optimal size (~200MB final image)
+- ✅ **Non-root user** for security
+- ✅ **FFmpeg included** for yt-dlp compatibility  
+- ✅ **Health checks** built-in
+- ✅ **Both STDIO and HTTP transport** support
+- ✅ **Resource limits** configured in docker-compose
+- ✅ **Development mode** with auto-reload and volume mounts
+
+**Docker Compose Profiles:**
+```bash
+# Production mode (default)
+docker-compose up yttranscript-mcp
+
+# Development mode with auto-reload
+docker-compose --profile dev up yttranscript-mcp-dev
+```
+
 ### Package Management
 
 ```bash
