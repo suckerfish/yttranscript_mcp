@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 import os
 import asyncio
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any, Tuple, Union
 from fastmcp.exceptions import ToolError
 
 try:
@@ -190,7 +190,7 @@ def parse_vtt_timestamp(timestamp: str) -> float:
         return float(time_part) + ms
 
 
-def filter_transcript_by_time(entries: List[TranscriptEntry], start_time: Optional[float] = None, end_time: Optional[float] = None) -> List[TranscriptEntry]:
+def filter_transcript_by_time(entries: List[TranscriptEntry], start_time: Union[float, None] = None, end_time: Union[float, None] = None) -> List[TranscriptEntry]:
     """
     Filter transcript entries by time range.
     
@@ -221,7 +221,7 @@ def filter_transcript_by_time(entries: List[TranscriptEntry], start_time: Option
     return filtered_entries
 
 
-async def fetch_subtitle_content_impl(video_id: str, language_code: Optional[str] = None) -> Tuple[List[TranscriptEntry], str, str, bool]:
+async def fetch_subtitle_content_impl(video_id: str, language_code: Union[str, None] = None) -> Tuple[List[TranscriptEntry], str, str, bool]:
     """
     Fetch subtitle content using yt-dlp CLI and return parsed entries.
     This version uses subprocess calls to avoid YouTube's 429 rate limiting.
@@ -309,7 +309,7 @@ async def fetch_subtitle_content_impl(video_id: str, language_code: Optional[str
         raise ToolError(f"Failed to fetch subtitles via CLI: {str(e)}")
 
 
-async def fetch_subtitle_content(video_id: str, language_code: Optional[str] = None) -> Tuple[List[TranscriptEntry], str, str, bool]:
+async def fetch_subtitle_content(video_id: str, language_code: Union[str, None] = None) -> Tuple[List[TranscriptEntry], str, str, bool]:
     """
     Fetch subtitle content using yt-dlp CLI and return parsed entries.
     This replaces the hybrid approach to avoid YouTube's rate limiting on direct HTTP requests.
@@ -323,10 +323,10 @@ async def fetch_subtitle_content(video_id: str, language_code: Optional[str] = N
 
 async def get_transcript_internal(
     video_id: str,
-    language_code: Optional[str] = None,
+    language_code: Union[str, None] = None,
     preserve_formatting: bool = True,
-    start_time: Optional[float] = None,
-    end_time: Optional[float] = None
+    start_time: Union[float, None] = None,
+    end_time: Union[float, None] = None
 ) -> TranscriptResponse:
     """Internal function to get transcript data."""
     try:
@@ -390,10 +390,10 @@ def register_transcript_tools(mcp):
     @mcp.tool()
     async def get_transcript(
         video_id: str,
-        language_code: Optional[str] = None,
+        language_code: Union[str, None] = None,
         preserve_formatting: bool = True,
-        start_time: Optional[float] = None,
-        end_time: Optional[float] = None
+        start_time: Union[float, None] = None,
+        end_time: Union[float, None] = None
     ) -> TranscriptResponse:
         """
         Fetch the transcript for a YouTube video using yt-dlp.
@@ -414,7 +414,7 @@ def register_transcript_tools(mcp):
     async def search_transcript(
         video_id: str,
         query: str,
-        language_code: Optional[str] = None,
+        language_code: Union[str, None] = None,
         case_sensitive: bool = False,
         context_window: int = 30
     ) -> SearchResponse:
@@ -564,7 +564,7 @@ def register_transcript_tools(mcp):
     @mcp.tool()
     async def get_transcript_summary(
         video_id: str,
-        language_code: Optional[str] = None,
+        language_code: Union[str, None] = None,
         max_length: int = 500
     ) -> Dict[str, Any]:
         """
