@@ -36,12 +36,12 @@ ENV PYTHONUNBUFFERED=1
 ENV YT_TRANSCRIPT_SERVER_HOST=0.0.0.0
 ENV YT_TRANSCRIPT_SERVER_PORT=8080
 
-# Expose port
-EXPOSE 8080
+# Expose port (can be overridden)
+EXPOSE ${YT_TRANSCRIPT_SERVER_PORT:-8080}
 
 # Health check with lightweight curl
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-  CMD curl -f http://localhost:8080/health || exit 1
+  CMD curl -f http://localhost:${YT_TRANSCRIPT_SERVER_PORT:-8080}/health || exit 1
 
-# Run the server with HTTP transport
-CMD ["uvicorn", "src.server:app", "--host", "0.0.0.0", "--port", "8080"]
+# Run the server with HTTP transport using environment variable
+CMD uvicorn src.server:app --host ${YT_TRANSCRIPT_SERVER_HOST:-0.0.0.0} --port ${YT_TRANSCRIPT_SERVER_PORT:-8080}
