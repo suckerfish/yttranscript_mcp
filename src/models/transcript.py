@@ -1,6 +1,6 @@
 """Pydantic models for transcript data structures."""
 
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 from pydantic import BaseModel, Field, validator
 import re
 
@@ -22,15 +22,13 @@ class TranscriptRequest(BaseModel):
         True,
         description="Whether to preserve original timestamp formatting"
     )
-    start_time: Optional[float] = Field(
+    start_time: Optional[Union[int, float, str]] = Field(
         None,
-        description="Start time in seconds to filter transcript",
-        ge=0
+        description="Start time in seconds to filter transcript"
     )
-    end_time: Optional[float] = Field(
+    end_time: Optional[Union[int, float, str]] = Field(
         None,
-        description="End time in seconds to filter transcript",
-        ge=0
+        description="End time in seconds to filter transcript"
     )
     
     @validator('video_id')
@@ -40,12 +38,63 @@ class TranscriptRequest(BaseModel):
             raise ValueError('Invalid YouTube video ID format')
         return v
     
-    @validator('end_time')
+    @validator('start_time', 'end_time', pre=True, allow_reuse=True)
+    def validate_time_param(cls, v):
+        """Parse and validate time parameters with robust type coercion for universal MCP client compatibility."""
+        # Handle None and empty values
+        if v is None:
+            return None
+        if v == "" or v == "null" or v == "undefined":
+            return None
+            
+        # Handle numeric types
+        if isinstance(v, (int, float)):
+            if v < 0:
+                raise ValueError("Time parameter must be non-negative")
+            return float(v)
+            
+        # Handle string types with robust parsing
+        if isinstance(v, str):
+            # Strip whitespace and common formatting
+            v_clean = v.strip()
+            if not v_clean:
+                return None
+                
+            try:
+                # Handle common string representations
+                if v_clean.lower() in ('null', 'none', 'undefined', 'nil'):
+                    return None
+                    
+                # Parse numeric strings
+                parsed = float(v_clean)
+                if parsed < 0:
+                    raise ValueError("Time parameter must be non-negative")
+                return parsed
+                
+            except (ValueError, TypeError):
+                raise ValueError(f"Time parameter must be a valid number, got: '{v}'")
+                
+        # Handle boolean (edge case)
+        if isinstance(v, bool):
+            raise ValueError("Time parameter cannot be a boolean")
+            
+        # Handle lists/objects (edge case)
+        if isinstance(v, (list, dict)):
+            raise ValueError(f"Time parameter must be a number, got {type(v).__name__}")
+            
+        # Fallback for unknown types
+        raise ValueError(f"Invalid time parameter type: {type(v).__name__}")
+    
+    @validator('end_time', pre=False)
     def validate_time_range(cls, v: Optional[float], values: Dict) -> Optional[float]:
         """Validate that end_time is greater than start_time when both are provided."""
+        # Both values should already be converted to float by the time parameter validator
         if v is not None and 'start_time' in values and values['start_time'] is not None:
-            if v <= values['start_time']:
-                raise ValueError('end_time must be greater than start_time')
+            start_val = values['start_time']
+            # Ensure both are floats (should already be converted by this point)
+            if isinstance(start_val, (int, float)) and isinstance(v, (int, float)):
+                if v < start_val:
+                    raise ValueError('end_time must be greater than or equal to start_time')
         return v
 
 

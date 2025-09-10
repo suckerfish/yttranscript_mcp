@@ -366,9 +366,9 @@ async def get_transcript_internal(
         if not entries:
             raise ToolError("No transcript content found")
         
-        # Apply time filtering if specified
-        if start_time is not None or end_time is not None:
-            entries = filter_transcript_by_time(entries, start_time, end_time)
+        # Apply time filtering if specified (use the validated values from the request model)
+        if request.start_time is not None or request.end_time is not None:
+            entries = filter_transcript_by_time(entries, request.start_time, request.end_time)
         
         # Calculate total duration and word count
         total_duration = max(entry.start + entry.duration for entry in entries) if entries else 0
@@ -410,8 +410,8 @@ def register_transcript_tools(mcp):
         video_id: str,
         language_code: Union[str, None] = None,
         preserve_formatting: bool = True,
-        start_time: Union[float, None] = None,
-        end_time: Union[float, None] = None
+        start_time: Union[int, float, str, None] = None,
+        end_time: Union[int, float, str, None] = None
     ) -> TranscriptResponse:
         """
         Fetch the transcript for a YouTube video using yt-dlp.
