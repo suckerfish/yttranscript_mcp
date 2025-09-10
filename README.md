@@ -1,213 +1,102 @@
 # YouTube Transcript MCP Server
 
-A **fully functional** Model Context Protocol (MCP) server that provides YouTube transcript fetching capabilities using **yt-dlp** for reliable subtitle extraction. This server uses streamable HTTP transport for reliable communication and bypasses YouTube API restrictions.
+A **production-ready** Model Context Protocol (MCP) server that provides YouTube transcript fetching capabilities using **yt-dlp CLI** for reliable subtitle extraction. Bypasses YouTube's rate limiting through CLI-based implementation.
 
-## ✅ Current Status: **PRODUCTION READY** 
+## Status: Production Ready ✅
 
-**Implementation:** ✅ **Migrated from youtube-transcript-api to yt-dlp** (December 2024)
-- **Core Issue Resolved:** Replaced broken youtube-transcript-api with reliable yt-dlp implementation
-- **Enhanced Features:** Added timestamp filtering, improved multi-language support (100+ languages)
-- **MCPTools Validated:** All 4 tools properly registered and discoverable via CLI testing
+**Implementation:** Full CLI migration complete (September 2025)
+- ✅ **CLI-Based:** Uses yt-dlp subprocess to avoid HTTP rate limiting
+- ✅ **Universal Compatibility:** Time parameters work across all MCP clients
+- ✅ **Advanced Analytics:** Enhanced transcript summary with content analysis
+- ✅ **Multi-Language:** 100+ languages with auto-generated and manual transcripts
 
-**Last tested:** All MCP tools validated using MCPTools CLI. Language detection working perfectly. Transcript fetching confirmed functional (rate limiting encountered demonstrates successful API connectivity).
+## Features
 
-**Auto-generated subtitles:** ✅ Fully supported with optimized detection and fallback logic for 100+ languages.
-
-## 🚀 Features
-
-- ✅ **Fetch complete transcripts** from YouTube videos with metadata using **yt-dlp**
-- ✅ **Auto-generated subtitle support** with intelligent fallback (manual → auto-generated → any available)
-- ✅ **Multi-language support** for 100+ languages via YouTube's subtitle system
-- ✅ **Format transcripts** as timestamped plain text or structured JSON data
-- ✅ **Timestamp filtering** - extract transcript segments by time range (NEW: yt-dlp enhancement)
-- ✅ **Search functionality** for specific text within transcripts with context
-- ✅ **Language detection** and availability checking with generated/manual distinction
-- ✅ **Transcript summaries** with statistics and sample text
-- ✅ **URL handling** - accepts both video IDs and full YouTube URLs
-- ✅ **VTT & JSON3 parsing** - supports multiple subtitle formats
-- ✅ **Robust error handling** with descriptive error messages
-- ✅ **MCP protocol compliance** with both STDIO and HTTP transport support
-- ✅ **Rate limiting awareness** - handles YouTube's API restrictions gracefully
+- **Fetch transcripts** from YouTube videos with metadata and timestamps
+- **Time filtering** - extract specific segments by start/end times
+- **Search functionality** - find text within transcripts with context  
+- **Advanced analytics** - speaking pace, filler words, engagement metrics, top words
+- **Language detection** - list available transcript languages
+- **Universal format support** - handles both video IDs and full YouTube URLs
+- **Dual transport** - STDIO and HTTP transport modes
+- **Docker support** - containerized deployment with health checks
 
 ## Installation
 
-### Local Installation
-
+### Quick Start
 ```bash
 # Install dependencies
 uv pip install -e .
 
-# For development
-uv pip install -e ".[dev]"
+# Run server (STDIO mode)
+python src/server.py
+
+# Run server (HTTP mode)
+uvicorn src.server:app --host 0.0.0.0 --port 8080
 ```
 
-### 🐳 Docker Installation (Recommended for Production)
-
+### Docker (Recommended)
 ```bash
-# Build the Docker image
-docker build -t yttranscript-mcp:latest .
+# Build and run
+docker build -t yttranscript-mcp .
+docker run -d -p 8080:8080 yttranscript-mcp
 
-# Run with docker-compose (recommended)
+# Or use docker-compose
 docker-compose up -d yttranscript-mcp
 
-# Or run directly
-docker run -d --name yttranscript-mcp -p 8000:8000 yttranscript-mcp:latest
-
-# Test the containerized server
-curl http://localhost:8000/health
+# Health check
+curl http://localhost:8080/health
 ```
-
-**Docker Features:**
-- ✅ **Multi-stage Alpine build** optimized for production (~200MB)
-- ✅ **Security hardened** with non-root user and resource limits
-- ✅ **FFmpeg included** for yt-dlp compatibility
-- ✅ **Health checks** and monitoring built-in
-- ✅ **Both STDIO and HTTP transport** modes supported
-- ✅ **Development profile** with auto-reload and volume mounts
 
 ## Usage
 
-### Running the Server
+### Available Tools
 
-**✅ Supports BOTH STDIO and Streamable HTTP transports:**
+1. **get_transcript** - Fetch video transcripts with optional time filtering
+2. **search_transcript** - Search for specific text within transcripts  
+3. **get_transcript_summary** - Advanced analytics and content insights
+4. **get_available_languages** - List available transcript languages
+
+### Testing Commands
 
 ```bash
-# STDIO Transport (default) - for local development/testing
-python src/server.py
-
-# Streamable HTTP Transport (recommended for production)
-uvicorn src.server:app --host 0.0.0.0 --port 8000
-
-# HTTP mode via direct execution
-python src/server.py --port 8000
-
-# With environment variable
-TRANSPORT=http python src/server.py
-```
-
-### ✅ Validation Testing
-
-The server infrastructure has been thoroughly validated:
-
-#### Local Testing
-```bash
-# Test health endpoint (HTTP transport)
-curl http://localhost:8000/health
-# Returns: {"status":"healthy","version":"0.1.0","service":"YouTube Transcript MCP Server"}
-
-# Test tool discovery (STDIO transport)
+# Discover tools
 mcp tools .venv/bin/python src/server.py
-# Returns: List of 4 available tools with descriptions
 
-# Test language detection
-mcp call get_available_languages --params '{"video_id":"VIDEO_ID"}' .venv/bin/python src/server.py
-# Returns: Array of available transcript languages with manual/auto-generated status
+# Basic transcript
+mcp call get_transcript --params '{"video_id":"jNQXAC9IVRw"}' .venv/bin/python src/server.py
 
-# Interactive testing
-mcp shell .venv/bin/python src/server.py
+# Time-filtered transcript
+mcp call get_transcript --params '{"video_id":"jNQXAC9IVRw", "start_time": 10, "end_time": 60}' .venv/bin/python src/server.py
+
+# Search within transcript
+mcp call search_transcript --params '{"video_id":"jNQXAC9IVRw", "query":"example"}' .venv/bin/python src/server.py
+
+# Advanced analytics
+mcp call get_transcript_summary --params '{"video_id":"jNQXAC9IVRw"}' .venv/bin/python src/server.py
+
+# Available languages
+mcp call get_available_languages --params '{"video_id":"jNQXAC9IVRw"}' .venv/bin/python src/server.py
 ```
 
-#### Docker Testing
-```bash
-# Test health endpoint
-curl http://localhost:8000/health
+## MCP Client Configuration
 
-# Test MCP tools in container
-mcp tools docker run --rm -i yttranscript-mcp:latest python src/server.py
-
-# Test specific tool
-mcp call get_available_languages --params '{"video_id":"9bZkp7q19f0"}' docker run --rm -i yttranscript-mcp:latest python src/server.py
-
-# Development mode with auto-reload
-docker-compose --profile dev up yttranscript-mcp-dev
-```
-
-### ⚠️ Known Limitations & Rate Limiting
-
-#### **YouTube Rate Limiting (HTTP 429 Errors)**
-During testing (December 14, 2024), we encountered YouTube's rate limiting after multiple successive requests:
-
-```
-429 Client Error: Too Many Requests for url: 
-https://www.youtube.com/api/timedtext?v=VIDEO_ID&...
-```
-
-**Rate Limiting Details:**
-- **Trigger**: Approximately 10-15 requests within 5 minutes from same IP
-- **Duration**: Rate limits appear to last 15-30 minutes
-- **Affected tools**: `get_transcript`, `search_transcript`, `get_transcript_summary`
-- **Unaffected**: `get_available_languages` (uses different endpoint)
-
-**Mitigation Strategies:**
-- **Implement delays**: Add 2-3 second delays between requests
-- **Caching**: Cache transcript data locally to avoid repeat requests
-- **Error handling**: Server returns descriptive ToolError messages for 429 responses
-- **Language detection first**: Use `get_available_languages` to check availability before fetching
-
-#### **Other Limitations**
-- **Video availability**: Not all videos have transcripts available (private videos, restricted content, etc.)
-- **Subtitle formats**: Depends on YouTube's available formats (VTT, JSON3, SRT)
-- **Auto-generated quality**: Auto-generated subtitles may have accuracy limitations
-
-### 🛠️ Available MCP Tools
-
-1. **`get_transcript`** ⭐ **Primary Tool** ✅ **FULLY FUNCTIONAL**
-   - Fetch complete transcript with timestamps and metadata using **yt-dlp**
-   - **NEW:** Timestamp filtering - extract specific time ranges (start_time, end_time)
-   - **Auto-generated subtitle support** with intelligent fallback logic
-   - Supports language selection and URL/video ID input
-   - Returns structured data with word count, duration, and formatted text
-   - Priority: Manual transcripts → Auto-generated → Any available
-   - **Tested:** Working perfectly, subject to YouTube rate limits
-
-2. **`get_available_languages`** ⭐ **HIGHLY RELIABLE** ✅ **WORKING**
-   - List all available transcript languages for a video
-   - **Distinguishes between manual and auto-generated transcripts**
-   - Includes language codes and human-readable names
-   - **Most reliable tool** - rarely affected by rate limits
-   - **Tested:** Returns 100+ languages for popular videos (e.g., Gangnam Style: 160 languages)
-
-3. **`search_transcript`** ✅ **FUNCTIONAL**
-   - Search for specific text within video transcripts using yt-dlp
-   - Configurable context window and case sensitivity
-   - Returns matches with surrounding context and timestamps
-   - **Tested:** Working correctly, subject to YouTube rate limits
-
-4. **`get_transcript_summary`** ✅ **FUNCTIONAL**
-   - Get summary statistics and sample text from transcripts
-   - Includes reading time estimates and key metrics
-   - Configurable sample text length
-   - **Tested:** Working correctly, subject to YouTube rate limits
-
-## Configuration
-
-Set environment variables or use command-line arguments:
-
-```bash
-export YT_TRANSCRIPT_SERVER_PORT=8000
-export YT_TRANSCRIPT_DEBUG=false
-```
-
-## 🔧 MCP Client Configuration
-
-### Recommended: Streamable HTTP (Production)
-
+### HTTP Transport (Production)
 ```json
 {
   "yttranscript": {
     "command": "uvicorn",
     "args": [
       "src.server:app",
-      "--host", "0.0.0.0",
-      "--port", "8000"
+      "--host", "0.0.0.0", 
+      "--port", "8080"
     ],
     "cwd": "/path/to/yttranscript_mcp"
   }
 }
 ```
 
-### Alternative: STDIO Transport (Development/Local)
-
+### STDIO Transport (Development)
 ```json
 {
   "yttranscript": {
@@ -221,24 +110,65 @@ export YT_TRANSCRIPT_DEBUG=false
 }
 ```
 
-### Transport Comparison
+## Key Features
 
-| Transport | Best For | Pros | Cons |
-|-----------|----------|------|------|
-| **STDIO** | Local development, testing | Simple setup, direct communication | Single connection, harder to debug |
-| **HTTP** | Production, remote access | Health checks, multiple clients, scalable | Requires port management |
+### Universal Parameter Compatibility
+Time filtering parameters accept multiple formats:
+- Integers: `{"start_time": 10}`
+- Floats: `{"start_time": 10.5}` 
+- Strings: `{"start_time": "10"}`
+- Nulls: `{"start_time": null}` or `{"start_time": "null"}`
 
-### 🧪 Tested Configuration
+### Advanced Analytics
+The `get_transcript_summary` tool provides:
+- **Speaking pace analysis** (words per minute with descriptive labels)
+- **Filler word detection** (um, uh, like, etc.) with percentages
+- **Content indicators** (conversational, formal, high energy)
+- **Top frequent words** (excluding stop words)
+- **Engagement metrics** (questions, exclamations)
+- **Reading time estimates** at multiple speeds
 
-This server has been validated to work with:
-- ✅ **FastMCP framework v0.9.0+** - MCP server infrastructure
-- ✅ **yt-dlp v2025.8.11+** - YouTube subtitle extraction (REPLACED youtube-transcript-api)
-- ✅ **requests v2.31.0+** - HTTP client for subtitle content fetching
-- ✅ **pydantic v2.0.0+** - Data validation and models
-- ✅ **uvicorn v0.24.0+** - ASGI server for HTTP transport
-- ✅ **Streamable HTTP transport** - Production deployment
-- ✅ **Python 3.11+** - Runtime environment
-- ✅ **MCPTools CLI validation** - All 4 tools discoverable and functional
-- ✅ **Real YouTube video transcripts** - Multiple video formats tested
+### CLI Implementation Benefits
+- **No rate limiting** - bypasses YouTube's HTTP restrictions
+- **Reliable extraction** - uses yt-dlp's robust parsing
+- **Better error handling** - clear error messages for various failure modes
+- **Format flexibility** - handles VTT, JSON3, and other subtitle formats
 
-**Migration completed:** youtube-transcript-api → yt-dlp (December 2024)
+## Configuration
+
+### Environment Variables
+```bash
+YT_TRANSCRIPT_SERVER_PORT=8080    # Server port (default: 8080)
+YT_TRANSCRIPT_SERVER_HOST=0.0.0.0 # Server host (default: 0.0.0.0)
+YT_TRANSCRIPT_DEBUG=false         # Debug mode
+```
+
+### Docker Environment
+```bash
+# Production
+docker run -e YT_TRANSCRIPT_SERVER_PORT=8080 yttranscript-mcp
+
+# Development with auto-reload  
+docker-compose --profile dev up yttranscript-mcp-dev
+```
+
+## Dependencies
+
+- **fastmcp>=0.9.0** - MCP server framework
+- **yt-dlp>=2025.8.11** - YouTube transcript extraction via CLI
+- **pydantic>=2.0.0** - Data validation and models
+- **uvicorn>=0.24.0** - ASGI server for HTTP transport
+
+This project uses `uv` for package management.
+
+## Troubleshooting
+
+- **Tool not found**: Verify `@mcp.tool()` decorator in tool definitions
+- **Validation errors**: Video IDs must be 11 characters, time values must be non-negative
+- **Time filtering issues**: Parameters accept multiple formats (int/float/string/null)
+- **Transport issues**: Use `uvicorn` for HTTP mode, `python src/server.py` for STDIO
+- **No transcript available**: Check with `get_available_languages` first
+
+## License
+
+This project is open source and available under the [MIT License](LICENSE).
