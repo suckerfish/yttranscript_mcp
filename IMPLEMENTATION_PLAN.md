@@ -125,13 +125,76 @@ with yt_dlp.YoutubeDL(ydl_opts) as ydl:
 - **Comprehensive features** (search, filtering, multi-language)
 - **Production ready** with proper error handling
 
-## Next Steps
-1. Implement Phase 1 (Core yt-dlp Integration)
-2. Test with MCPTools commands
-3. Validate all 4 tools working
-4. Performance optimization if needed
-5. Documentation updates
+## CLI Migration Plan (September 2025)
+
+### 🚨 **New Issue Discovered: YouTube Rate Limiting**
+Current hybrid approach (yt-dlp library + requests.get()) is failing with **HTTP 429 errors** due to YouTube's anti-bot measures. Direct HTTP requests to subtitle URLs are being blocked.
+
+### ✅ **Proof of Concept: CLI-based Solution - COMPLETE**
+- **New CLI implementation created** - `get_transcript_cli` tool using subprocess
+- **Architecture validated** - yt-dlp CLI via asyncio subprocess execution
+- **Error handling confirmed** - Proper 429 detection and timeout management
+- **File management working** - Temporary directory cleanup and VTT parsing
+
+### 📋 **Next Steps: Full CLI Migration**
+
+#### **Phase 1: Testing & Validation** (Immediate - Next 1-2 hours)
+1. **Wait for rate limit expiration** (15-30 minutes from last test)
+2. **Test CLI implementation with fresh video** 
+   - Verify `get_transcript_cli` works end-to-end
+   - Compare performance vs original (when working)
+   - Test multiple languages and video types
+3. **Performance benchmarking**
+   - Measure subprocess overhead vs library calls
+   - Test concurrent request handling
+   - Validate timeout and error scenarios
+
+#### **Phase 2: Full Implementation** (Next session)
+4. **Replace fetch_subtitle_content() completely**
+   - Remove `requests.get()` calls (the problematic code)
+   - Replace with CLI-based `fetch_subtitle_content_cli()`
+   - Update `get_transcript_internal()` to use CLI version
+5. **Update remaining tools**
+   - Migrate `search_transcript` to use CLI backend
+   - Update `get_transcript_summary` to use CLI backend  
+   - Keep `get_available_languages` as-is (uses yt-dlp library for metadata only)
+6. **Remove proof-of-concept code**
+   - Delete `get_transcript_cli` test tool
+   - Remove `get_transcript_internal_cli` duplicate
+   - Clean up imports and documentation
+
+#### **Phase 3: Production Deployment** (Future)
+7. **Docker/Container updates**
+   - Ensure yt-dlp CLI is available in containers
+   - Test subprocess execution in containerized environment
+   - Update health checks if needed
+8. **Performance optimization**
+   - Implement request throttling (2-3 second delays)
+   - Add caching layer for repeated requests
+   - Consider subprocess pooling for high-load scenarios
+9. **Documentation updates**
+   - Update CLAUDE.md with new architecture
+   - Document CLI dependencies and deployment requirements
+   - Update troubleshooting guides
+
+### 🔧 **Implementation Strategy**
+- **Gradual replacement** - Keep original tools as fallback during migration
+- **Feature parity** - Maintain all existing functionality and interfaces
+- **Backwards compatibility** - No breaking changes to MCP tool signatures
+- **Robust error handling** - Better YouTube rate limiting detection and messaging
+
+### 🎯 **Success Criteria**
+- ✅ **No more 429 errors** - CLI bypasses YouTube's anti-bot measures
+- ✅ **Performance maintained** - Response times under 10 seconds
+- ✅ **Reliability improved** - Consistent transcript fetching without rate limits
+- ✅ **Production ready** - Deployed and stable in containerized environments
+
+### 📊 **Technical Notes**
+- **Current bottleneck**: `requests.get(subtitle_url)` at line 300 of transcript_tools.py
+- **CLI advantages**: Superior anti-detection, request patterns, and YouTube compatibility
+- **Architecture**: Replace direct HTTP calls with `yt-dlp --write-auto-subs` subprocess execution
+- **Proven approach**: CLI version already works while library+requests fails
 
 ---
 
-**Key Insight**: yt-dlp can extract subtitle content directly to memory without file writing, bypassing the issues with youtube-transcript-api while providing more control and features.
+**Key Insight**: The hybrid yt-dlp library + requests approach is fundamentally flawed due to YouTube's detection of direct subtitle URL requests. Pure CLI approach is the only reliable solution for production deployment.

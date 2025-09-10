@@ -3,6 +3,10 @@
 import re
 import json
 import requests
+import subprocess
+import tempfile
+import os
+import asyncio
 from typing import List, Optional, Dict, Any, Tuple
 from fastmcp.exceptions import ToolError
 
@@ -218,6 +222,94 @@ def filter_transcript_by_time(entries: List[TranscriptEntry], start_time: Option
     return filtered_entries
 
 
+async def fetch_subtitle_content_cli(video_id: str, language_code: Optional[str] = None) -> Tuple[List[TranscriptEntry], str, str, bool]:
+    """
+    Fetch subtitle content using yt-dlp CLI and return parsed entries.
+    This version uses subprocess calls to avoid YouTube's 429 rate limiting.
+    
+    Returns:
+        Tuple of (entries, language_code, language_name, is_generated)
+    """
+    try:
+        # Create temporary directory for subtitle downloads
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Prepare yt-dlp CLI command
+            cmd = [
+                'yt-dlp',
+                '--write-auto-subs',
+                '--skip-download',
+                '--sub-format', 'vtt',
+                '--quiet',
+                '--no-warnings',
+                '-o', os.path.join(temp_dir, '%(id)s.%(ext)s')
+            ]
+            
+            # Add language specification if provided
+            if language_code:
+                cmd.extend(['--sub-langs', language_code])
+            
+            # Add video URL
+            video_url = f'https://www.youtube.com/watch?v={video_id}'
+            cmd.append(video_url)
+            
+            # Execute yt-dlp CLI
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=temp_dir
+            )
+            
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
+            
+            if process.returncode != 0:
+                error_msg = stderr.decode('utf-8') if stderr else 'Unknown error'
+                if 'HTTP Error 429' in error_msg:
+                    raise ToolError("Rate limited by YouTube. Please try again later.")
+                elif 'No subtitles' in error_msg or 'Unable to download' in error_msg:
+                    raise ToolError(f"No subtitles available for video {video_id}")
+                else:
+                    raise ToolError(f"Failed to download subtitles: {error_msg}")
+            
+            # Find downloaded subtitle files
+            subtitle_files = [f for f in os.listdir(temp_dir) if f.endswith('.vtt')]
+            
+            if not subtitle_files:
+                raise ToolError(f"No subtitle files downloaded for video {video_id}")
+            
+            # Use the first available subtitle file
+            subtitle_file = subtitle_files[0]
+            subtitle_path = os.path.join(temp_dir, subtitle_file)
+            
+            # Extract language info from filename
+            # Format: videoId.languageCode.vtt
+            parts = subtitle_file.split('.')
+            if len(parts) >= 3:
+                detected_lang = parts[1]
+                language_name = detected_lang.upper()
+                is_generated = True  # CLI auto-subs are always generated
+            else:
+                detected_lang = language_code or 'unknown'
+                language_name = detected_lang.upper()
+                is_generated = True
+            
+            # Read and parse subtitle content
+            with open(subtitle_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Parse VTT content (reuse existing parser)
+            entries = parse_vtt_content(content)
+            
+            return entries, detected_lang, language_name, is_generated
+            
+    except asyncio.TimeoutError:
+        raise ToolError("Subtitle download timed out")
+    except Exception as e:
+        if isinstance(e, ToolError):
+            raise
+        raise ToolError(f"Failed to fetch subtitles via CLI: {str(e)}")
+
+
 def fetch_subtitle_content(video_id: str, language_code: Optional[str] = None) -> Tuple[List[TranscriptEntry], str, str, bool]:
     """
     Fetch subtitle content using yt-dlp and return parsed entries.
@@ -314,6 +406,58 @@ def fetch_subtitle_content(video_id: str, language_code: Optional[str] = None) -
     return entries, selected_lang, language_name, is_generated
 
 
+async def get_transcript_internal_cli(
+    video_id: str,
+    language_code: Optional[str] = None,
+    preserve_formatting: bool = True,
+    start_time: Optional[float] = None,
+    end_time: Optional[float] = None
+) -> TranscriptResponse:
+    """CLI-based internal function to get transcript data."""
+    try:
+        # Extract video ID if URL was provided
+        clean_video_id = extract_video_id(video_id)
+        
+        # Validate request
+        request = TranscriptRequest(
+            video_id=clean_video_id,
+            language_code=language_code,
+            preserve_formatting=preserve_formatting
+        )
+        
+        # Fetch subtitle content using yt-dlp CLI
+        entries, selected_lang, language_name, is_generated = await fetch_subtitle_content_cli(
+            request.video_id, request.language_code
+        )
+        
+        if not entries:
+            raise ToolError(f"No transcript entries found for video: {request.video_id}")
+        
+        # Apply time filtering if specified
+        if start_time is not None or end_time is not None:
+            entries = filter_entries_by_time(entries, start_time, end_time)
+        
+        # Calculate metadata
+        total_duration = max(entry.end for entry in entries) if entries else 0.0
+        total_words = sum(len(entry.text.split()) for entry in entries)
+        
+        # Create response
+        return TranscriptResponse(
+            video_id=request.video_id,
+            language_code=selected_lang,
+            language_name=language_name,
+            is_generated=is_generated,
+            entries=entries,
+            total_duration=total_duration,
+            total_words=total_words,
+            entry_count=len(entries)
+        )
+    except Exception as e:
+        if isinstance(e, ToolError):
+            raise
+        raise ToolError(f"Failed to get transcript: {str(e)}")
+
+
 async def get_transcript_internal(
     video_id: str,
     language_code: Optional[str] = None,
@@ -402,6 +546,31 @@ def register_transcript_tools(mcp):
             Complete transcript data with metadata
         """
         return await get_transcript_internal(video_id, language_code, preserve_formatting, start_time, end_time)
+    
+    @mcp.tool()
+    async def get_transcript_cli(
+        video_id: str,
+        language_code: Optional[str] = None,
+        preserve_formatting: bool = True,
+        start_time: Optional[float] = None,
+        end_time: Optional[float] = None
+    ) -> TranscriptResponse:
+        """
+        Fetch the transcript for a YouTube video using yt-dlp CLI (proof of concept).
+        
+        This version uses yt-dlp CLI via subprocess to avoid YouTube's rate limiting.
+        
+        Args:
+            video_id: YouTube video ID or URL
+            language_code: Optional language code (e.g., 'en', 'es'). If not provided, uses auto-detected language.
+            preserve_formatting: Whether to preserve timestamp formatting in plain text
+            start_time: Optional start time in seconds to filter transcript
+            end_time: Optional end time in seconds to filter transcript
+            
+        Returns:
+            Complete transcript data with metadata
+        """
+        return await get_transcript_internal_cli(video_id, language_code, preserve_formatting, start_time, end_time)
     
     @mcp.tool()
     async def search_transcript(
