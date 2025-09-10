@@ -167,13 +167,29 @@ def parse_json3_content(content: str) -> List[TranscriptEntry]:
 
 def parse_vtt_timestamp(timestamp: str) -> float:
     """Parse VTT timestamp format (HH:MM:SS.mmm) to seconds."""
-    # Remove any extra formatting
+    # Remove any extra formatting and extract only the timestamp part
+    timestamp = timestamp.strip()
+    
+    # Remove alignment and positioning data (e.g., "align:start position:0%")
+    # VTT timestamps can have additional formatting that needs to be stripped
+    timestamp = re.sub(r'\s+(align|position|size|line|vertical):[^\s]*', '', timestamp)
     timestamp = timestamp.strip()
     
     # Handle different timestamp formats
     if '.' in timestamp:
-        time_part, ms_part = timestamp.split('.')
-        ms = float('0.' + ms_part)
+        # Split on the first dot to handle decimals
+        dot_parts = timestamp.split('.', 1)
+        time_part = dot_parts[0]
+        ms_part = dot_parts[1]
+        
+        # Remove any non-numeric characters from milliseconds part
+        ms_part = re.sub(r'[^0-9]', '', ms_part)
+        if ms_part:
+            # Pad or truncate to 3 digits for milliseconds
+            ms_part = ms_part[:3].ljust(3, '0')
+            ms = float('0.' + ms_part)
+        else:
+            ms = 0
     else:
         time_part = timestamp
         ms = 0
