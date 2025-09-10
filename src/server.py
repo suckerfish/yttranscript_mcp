@@ -71,8 +71,8 @@ def parse_arguments():
     parser.add_argument(
         '--port',
         type=int,
-        default=8000,
-        help='Port to run the server on (default: 8000)'
+        default=8080,
+        help='Port to run the server on (default: 8080)'
     )
     parser.add_argument(
         '--host',
@@ -100,7 +100,7 @@ def main():
     # Determine transport mode
     transport = os.getenv("TRANSPORT", "stdio")
     
-    if transport == "http" or args.port != 8000:
+    if transport == "http" or args.port != 8080:
         # Use streamable HTTP with stateless mode for remote access
         mcp.run(
             transport="streamable-http",

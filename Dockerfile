@@ -1,65 +1,46 @@
-# Multi-stage build for YouTube Transcript MCP Server
-# Optimized for 2025 Docker best practices
+FROM python:3.11-slim
 
-# Build stage - Install dependencies and build wheels
-FROM python:3.11-alpine AS builder
-
-# Install build dependencies
-RUN apk add --no-cache \
-    build-base \
-    libffi-dev \
-    openssl-dev \
-    && rm -rf /var/cache/apk/*
-
-# Create virtual environment
-RUN python -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
-
-# Copy dependency files
-WORKDIR /app
-COPY pyproject.toml README.md ./
-
-# Install Python dependencies
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
-    && pip install --no-cache-dir -e .
-
-# Production stage - Minimal runtime environment
-FROM python:3.11-alpine AS production
-
-# Install runtime dependencies including ffmpeg for yt-dlp
-RUN apk add --no-cache \
+# Install system dependencies (minimal)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
     ffmpeg \
     ca-certificates \
-    && rm -rf /var/cache/apk/*
-
-# Copy virtual environment from builder stage
-COPY --from=builder /opt/venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
-
-# Create non-root user for security
-RUN adduser -D -s /bin/sh appuser
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
 # Set working directory
 WORKDIR /app
 
-# Copy application source code
-COPY --chown=appuser:appuser src/ ./src/
+# Install uv (pinned version for reproducibility)
+RUN pip install --no-cache-dir uv==0.8.15
 
-# Switch to non-root user
+# Copy dependency files first (for better caching)
+COPY pyproject.toml ./
+COPY uv.lock* ./
+
+# Install dependencies in a separate layer (cached unless dependencies change)
+RUN uv pip install --system --no-cache .
+
+# Copy application code (this layer changes most frequently)
+COPY src/ ./src/
+
+# Create non-root user for security
+RUN adduser --disabled-password --gecos '' --shell /bin/bash appuser \
+    && chown -R appuser:appuser /app
 USER appuser
 
 # Environment variables
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 ENV YT_TRANSCRIPT_SERVER_HOST=0.0.0.0
-ENV YT_TRANSCRIPT_SERVER_PORT=8000
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8000/health || exit 1
+ENV YT_TRANSCRIPT_SERVER_PORT=8080
 
 # Expose port
-EXPOSE 8000
+EXPOSE 8080
 
-# Default command - run with uvicorn for HTTP transport
-CMD ["uvicorn", "src.server:app", "--host", "0.0.0.0", "--port", "8000"]
+# Health check with lightweight curl
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+  CMD curl -f http://localhost:8080/health || exit 1
+
+# Run the server with HTTP transport
+CMD ["uvicorn", "src.server:app", "--host", "0.0.0.0", "--port", "8080"]

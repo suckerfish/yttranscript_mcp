@@ -17,10 +17,10 @@ The server uses **yt-dlp** instead of the broken youtube-transcript-api, providi
 For streamable HTTP (recommended):
 ```bash
 # Production with uvicorn
-uvicorn src.server:app --host 0.0.0.0 --port 8000
+uvicorn src.server:app --host 0.0.0.0 --port 8080
 
 # Development with auto-reload
-uvicorn src.server:app --host 0.0.0.0 --port 8000 --reload
+uvicorn src.server:app --host 0.0.0.0 --port 8080 --reload
 
 # Direct Python execution (stdio mode)
 python src/server.py --port 8000 --debug
@@ -32,7 +32,7 @@ python src/server.py --port 8000 --debug
 
 ```bash
 # Health check (production deployment)
-curl http://localhost:8000/health
+curl http://localhost:8080/health
 # Returns: {"status":"healthy","version":"0.1.0","service":"YouTube Transcript MCP Server"}
 
 # ✅ MCPTOOLS VALIDATION COMPLETE:
@@ -62,10 +62,10 @@ mcp call get_transcript_summary --params '{"video_id":"jNQXAC9IVRw"}' .venv/bin/
 
 ```bash
 # Test uvicorn streamable HTTP
-uvicorn src.server:app --host 0.0.0.0 --port 8000
+uvicorn src.server:app --host 0.0.0.0 --port 8080
 
 # Verify health endpoint
-curl http://localhost:8000/health
+curl http://localhost:8080/health
 # Expected: {"status":"healthy","version":"0.1.0","service":"YouTube Transcript MCP Server"}
 
 # Test with different video formats
@@ -85,10 +85,10 @@ docker build -t yttranscript-mcp:latest .
 docker-compose up -d yttranscript-mcp
 
 # Or run directly
-docker run -d --name yttranscript-mcp -p 8000:8000 yttranscript-mcp:latest
+docker run -d --name yttranscript-mcp -p 8080:8080 yttranscript-mcp:latest
 
 # Test health endpoint
-curl http://localhost:8000/health
+curl http://localhost:8080/health
 
 # Test MCP tools in container
 mcp tools docker run --rm -i yttranscript-mcp:latest python src/server.py
@@ -252,7 +252,7 @@ For detailed implementation guidance, see:
 - **MCP Client Config**: Point to `python src/server.py` command
 
 ### 🌐 Streamable HTTP Transport (Recommended for Production)  
-- **Usage**: `uvicorn src.server:app --host 0.0.0.0 --port 8000`
+- **Usage**: `uvicorn src.server:app --host 0.0.0.0 --port 8080`
 - **Best for**: Remote deployments, cloud hosting, production environments
 - **How it works**: HTTP server with `/mcp` endpoint for JSON-RPC communication
 - **MCP Client Config**: Point to HTTP endpoint `http://host:port/mcp`
@@ -267,7 +267,7 @@ python src/server.py
 # HTTP mode (when port specified or TRANSPORT=http)
 python src/server.py --port 8000
 TRANSPORT=http python src/server.py
-uvicorn src.server:app --port 8000
+uvicorn src.server:app --port 8080
 ```
 
 ## Available Tools (yt-dlp Implementation)
@@ -311,7 +311,7 @@ When working with this codebase, focus on:
 
 Key configuration variables:
 ```bash
-YT_TRANSCRIPT_SERVER_PORT=8000    # Server port (default: 8000)
+YT_TRANSCRIPT_SERVER_PORT=8080    # Server port (default: 8080)
 YT_TRANSCRIPT_SERVER_HOST=0.0.0.0 # Server host (default: 0.0.0.0)
 YT_TRANSCRIPT_DEBUG=false         # Debug mode
 ```
@@ -327,7 +327,7 @@ For streamable HTTP transport, add to your MCP client:
     "args": [
       "src.server:app",
       "--host", "0.0.0.0", 
-      "--port", "8000"
+      "--port", "8080"
     ],
     "cwd": "/path/to/yttranscript_mcp"
   }
@@ -421,7 +421,7 @@ async def my_tool():
 python src/server.py --port 3000 --host localhost --debug
 
 # Or with uvicorn for production
-uvicorn src.server:app --host 0.0.0.0 --port 8000 --workers 4
+uvicorn src.server:app --host 0.0.0.0 --port 8080 --workers 4
 ```
 
 ## Troubleshooting

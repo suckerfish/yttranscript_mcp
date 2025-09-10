@@ -88,3 +88,15 @@ temp/
 
 # Project specific
 requirements-docker.txt
+uv.lock
+.claude/
+
+# GitHub
+.github/
+
+# Environment files
+.env.example
+.env.local
+.env.development
+.env.test
+.env.production
