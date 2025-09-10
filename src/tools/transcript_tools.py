@@ -2,7 +2,6 @@
 
 import re
 import json
-import requests
 import subprocess
 import tempfile
 import os
@@ -222,7 +221,7 @@ def filter_transcript_by_time(entries: List[TranscriptEntry], start_time: Option
     return filtered_entries
 
 
-async def fetch_subtitle_content_cli(video_id: str, language_code: Optional[str] = None) -> Tuple[List[TranscriptEntry], str, str, bool]:
+async def fetch_subtitle_content_impl(video_id: str, language_code: Optional[str] = None) -> Tuple[List[TranscriptEntry], str, str, bool]:
     """
     Fetch subtitle content using yt-dlp CLI and return parsed entries.
     This version uses subprocess calls to avoid YouTube's 429 rate limiting.
@@ -310,152 +309,16 @@ async def fetch_subtitle_content_cli(video_id: str, language_code: Optional[str]
         raise ToolError(f"Failed to fetch subtitles via CLI: {str(e)}")
 
 
-def fetch_subtitle_content(video_id: str, language_code: Optional[str] = None) -> Tuple[List[TranscriptEntry], str, str, bool]:
+async def fetch_subtitle_content(video_id: str, language_code: Optional[str] = None) -> Tuple[List[TranscriptEntry], str, str, bool]:
     """
-    Fetch subtitle content using yt-dlp and return parsed entries.
+    Fetch subtitle content using yt-dlp CLI and return parsed entries.
+    This replaces the hybrid approach to avoid YouTube's rate limiting on direct HTTP requests.
     
     Returns:
         Tuple of (entries, language_code, language_name, is_generated)
     """
-    info = get_video_info(video_id)
-    
-    manual_subs = info.get('subtitles', {})
-    auto_subs = info.get('automatic_captions', {})
-    
-    # Determine which subtitles to use
-    subtitle_data = None
-    selected_lang = None
-    is_generated = False
-    language_name = None
-    
-    if language_code:
-        # Try specific language
-        if language_code in manual_subs:
-            subtitle_data = manual_subs[language_code]
-            selected_lang = language_code
-            is_generated = False
-        elif language_code in auto_subs:
-            subtitle_data = auto_subs[language_code]
-            selected_lang = language_code
-            is_generated = True
-        else:
-            raise ToolError(f"No subtitles found for language: {language_code}")
-    else:
-        # Auto-select best available
-        if 'en' in manual_subs:
-            subtitle_data = manual_subs['en']
-            selected_lang = 'en'
-            is_generated = False
-        elif 'en' in auto_subs:
-            subtitle_data = auto_subs['en']
-            selected_lang = 'en'
-            is_generated = True
-        else:
-            # Fall back to any available subtitle
-            if manual_subs:
-                selected_lang = list(manual_subs.keys())[0]
-                subtitle_data = manual_subs[selected_lang]
-                is_generated = False
-            elif auto_subs:
-                selected_lang = list(auto_subs.keys())[0]
-                subtitle_data = auto_subs[selected_lang]
-                is_generated = True
-            else:
-                raise ToolError("No subtitles available for this video")
-    
-    # Set language name
-    language_name = selected_lang.upper() if selected_lang else "Unknown"
-    
-    # Find best format (prefer VTT, then JSON3)
-    subtitle_url = None
-    subtitle_format = None
-    
-    for entry in subtitle_data:
-        if entry.get('ext') == 'vtt':
-            subtitle_url = entry.get('url')
-            subtitle_format = 'vtt'
-            break
-        elif entry.get('ext') == 'json3':
-            subtitle_url = entry.get('url')
-            subtitle_format = 'json3'
-    
-    if not subtitle_url and subtitle_data:
-        # Fallback to first available
-        subtitle_url = subtitle_data[0].get('url')
-        subtitle_format = subtitle_data[0].get('ext', 'unknown')
-    
-    if not subtitle_url:
-        raise ToolError("No subtitle URL found")
-    
-    # Fetch content
-    try:
-        response = requests.get(subtitle_url, timeout=10)
-        response.raise_for_status()
-        content = response.text
-    except requests.RequestException as e:
-        raise ToolError(f"Failed to fetch subtitle content: {str(e)}")
-    
-    # Parse content based on format
-    if subtitle_format == 'vtt':
-        entries = parse_vtt_content(content)
-    elif subtitle_format == 'json3':
-        entries = parse_json3_content(content)
-    else:
-        raise ToolError(f"Unsupported subtitle format: {subtitle_format}")
-    
-    return entries, selected_lang, language_name, is_generated
+    return await fetch_subtitle_content_impl(video_id, language_code)
 
-
-async def get_transcript_internal_cli(
-    video_id: str,
-    language_code: Optional[str] = None,
-    preserve_formatting: bool = True,
-    start_time: Optional[float] = None,
-    end_time: Optional[float] = None
-) -> TranscriptResponse:
-    """CLI-based internal function to get transcript data."""
-    try:
-        # Extract video ID if URL was provided
-        clean_video_id = extract_video_id(video_id)
-        
-        # Validate request
-        request = TranscriptRequest(
-            video_id=clean_video_id,
-            language_code=language_code,
-            preserve_formatting=preserve_formatting
-        )
-        
-        # Fetch subtitle content using yt-dlp CLI
-        entries, selected_lang, language_name, is_generated = await fetch_subtitle_content_cli(
-            request.video_id, request.language_code
-        )
-        
-        if not entries:
-            raise ToolError(f"No transcript entries found for video: {request.video_id}")
-        
-        # Apply time filtering if specified
-        if start_time is not None or end_time is not None:
-            entries = filter_entries_by_time(entries, start_time, end_time)
-        
-        # Calculate metadata
-        total_duration = max(entry.end for entry in entries) if entries else 0.0
-        total_words = sum(len(entry.text.split()) for entry in entries)
-        
-        # Create response
-        return TranscriptResponse(
-            video_id=request.video_id,
-            language_code=selected_lang,
-            language_name=language_name,
-            is_generated=is_generated,
-            entries=entries,
-            total_duration=total_duration,
-            total_words=total_words,
-            entry_count=len(entries)
-        )
-    except Exception as e:
-        if isinstance(e, ToolError):
-            raise
-        raise ToolError(f"Failed to get transcript: {str(e)}")
 
 
 async def get_transcript_internal(
@@ -477,8 +340,8 @@ async def get_transcript_internal(
             preserve_formatting=preserve_formatting
         )
         
-        # Fetch subtitle content using yt-dlp
-        entries, selected_lang, language_name, is_generated = fetch_subtitle_content(
+        # Fetch subtitle content using yt-dlp CLI
+        entries, selected_lang, language_name, is_generated = await fetch_subtitle_content(
             request.video_id, request.language_code
         )
         
@@ -546,31 +409,6 @@ def register_transcript_tools(mcp):
             Complete transcript data with metadata
         """
         return await get_transcript_internal(video_id, language_code, preserve_formatting, start_time, end_time)
-    
-    @mcp.tool()
-    async def get_transcript_cli(
-        video_id: str,
-        language_code: Optional[str] = None,
-        preserve_formatting: bool = True,
-        start_time: Optional[float] = None,
-        end_time: Optional[float] = None
-    ) -> TranscriptResponse:
-        """
-        Fetch the transcript for a YouTube video using yt-dlp CLI (proof of concept).
-        
-        This version uses yt-dlp CLI via subprocess to avoid YouTube's rate limiting.
-        
-        Args:
-            video_id: YouTube video ID or URL
-            language_code: Optional language code (e.g., 'en', 'es'). If not provided, uses auto-detected language.
-            preserve_formatting: Whether to preserve timestamp formatting in plain text
-            start_time: Optional start time in seconds to filter transcript
-            end_time: Optional end time in seconds to filter transcript
-            
-        Returns:
-            Complete transcript data with metadata
-        """
-        return await get_transcript_internal_cli(video_id, language_code, preserve_formatting, start_time, end_time)
     
     @mcp.tool()
     async def search_transcript(
