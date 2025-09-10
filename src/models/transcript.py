@@ -22,12 +22,30 @@ class TranscriptRequest(BaseModel):
         True,
         description="Whether to preserve original timestamp formatting"
     )
+    start_time: Optional[float] = Field(
+        None,
+        description="Start time in seconds to filter transcript",
+        ge=0
+    )
+    end_time: Optional[float] = Field(
+        None,
+        description="End time in seconds to filter transcript",
+        ge=0
+    )
     
     @validator('video_id')
     def validate_video_id(cls, v: str) -> str:
         """Validate YouTube video ID format."""
         if not re.match(r'^[a-zA-Z0-9_-]{11}$', v):
             raise ValueError('Invalid YouTube video ID format')
+        return v
+    
+    @validator('end_time')
+    def validate_time_range(cls, v: Optional[float], values: Dict) -> Optional[float]:
+        """Validate that end_time is greater than start_time when both are provided."""
+        if v is not None and 'start_time' in values and values['start_time'] is not None:
+            if v <= values['start_time']:
+                raise ValueError('end_time must be greater than start_time')
         return v
 
 

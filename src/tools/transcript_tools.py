@@ -353,7 +353,9 @@ async def get_transcript_internal(
         request = TranscriptRequest(
             video_id=clean_video_id,
             language_code=language_code,
-            preserve_formatting=preserve_formatting
+            preserve_formatting=preserve_formatting,
+            start_time=start_time,
+            end_time=end_time
         )
         
         # Fetch subtitle content using yt-dlp CLI
@@ -602,15 +604,87 @@ def register_transcript_tools(mcp):
                 preserve_formatting=False
             )
             
-            # Calculate additional statistics
+            # Calculate basic statistics
             total_words = transcript_response.word_count
             total_entries = len(transcript_response.transcript)
             avg_words_per_entry = total_words / total_entries if total_entries > 0 else 0
             
-            # Get sample text (first portion)
-            sample_text = transcript_response.plain_text[:max_length]
-            if len(transcript_response.plain_text) > max_length:
-                sample_text += "..."
+            # Calculate advanced analytics
+            words_per_minute = (total_words / (transcript_response.total_duration / 60)) if transcript_response.total_duration > 0 else 0
+            
+            # Analyze content patterns
+            text_lower = transcript_response.plain_text.lower()
+            
+            # Common filler words detection
+            filler_words = ['um', 'uh', 'like', 'you know', 'i mean', 'basically', 'actually', 'literally', 'sort of', 'kind of']
+            filler_count = sum(text_lower.count(filler) for filler in filler_words)
+            filler_percentage = (filler_count / total_words * 100) if total_words > 0 else 0
+            
+            # Question detection
+            question_count = transcript_response.plain_text.count('?')
+            
+            # Exclamation detection for enthusiasm
+            exclamation_count = transcript_response.plain_text.count('!')
+            
+            # Most frequent words (excluding common stop words)
+            stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them', 'my', 'your', 'his', 'her', 'its', 'our', 'their', 'this', 'that', 'these', 'those'}
+            words = [word.strip('.,!?;:"()[]{}') for word in text_lower.split()]
+            word_freq = {}
+            for word in words:
+                if len(word) > 2 and word not in stop_words and word.isalpha():
+                    word_freq[word] = word_freq.get(word, 0) + 1
+            
+            # Top 5 most frequent meaningful words
+            top_words = sorted(word_freq.items(), key=lambda x: x[1], reverse=True)[:5]
+            
+            # Content segments analysis
+            entries = transcript_response.transcript
+            segment_lengths = [len(entry.text.split()) for entry in entries]
+            avg_segment_length = sum(segment_lengths) / len(segment_lengths) if segment_lengths else 0
+            max_segment_length = max(segment_lengths) if segment_lengths else 0
+            min_segment_length = min(segment_lengths) if segment_lengths else 0
+            
+            # Speaking pace analysis
+            if transcript_response.total_duration > 0:
+                if words_per_minute < 120:
+                    pace_description = "slow"
+                elif words_per_minute < 160:
+                    pace_description = "normal"
+                elif words_per_minute < 200:
+                    pace_description = "fast"
+                else:
+                    pace_description = "very fast"
+            else:
+                pace_description = "unknown"
+            
+            # Enhanced sample text with key moments
+            sample_sections = []
+            
+            # Beginning sample
+            beginning_text = transcript_response.plain_text[:max_length//3]
+            if len(transcript_response.plain_text) > max_length//3:
+                beginning_text = beginning_text.rsplit(' ', 1)[0] + "..."
+            sample_sections.append(f"[Beginning] {beginning_text}")
+            
+            # Middle sample (if transcript is long enough)
+            if transcript_response.total_duration > 60:
+                middle_start = len(transcript_response.plain_text) // 2 - max_length//6
+                middle_end = len(transcript_response.plain_text) // 2 + max_length//6
+                middle_text = transcript_response.plain_text[middle_start:middle_end]
+                if middle_start > 0:
+                    middle_text = "..." + middle_text
+                if middle_end < len(transcript_response.plain_text):
+                    middle_text = middle_text.rsplit(' ', 1)[0] + "..."
+                sample_sections.append(f"[Middle] {middle_text}")
+            
+            # End sample (if different from beginning)
+            if transcript_response.total_duration > 30:
+                end_text = transcript_response.plain_text[-max_length//3:]
+                if len(transcript_response.plain_text) > max_length//3:
+                    end_text = "..." + end_text.split(' ', 1)[1] if ' ' in end_text else end_text
+                sample_sections.append(f"[End] {end_text}")
+            
+            enhanced_sample = "\n\n".join(sample_sections)
             
             return {
                 "video_id": transcript_response.video_id,
@@ -618,14 +692,44 @@ def register_transcript_tools(mcp):
                 "language_name": transcript_response.language_name,
                 "is_generated": transcript_response.is_generated,
                 "statistics": {
-                    "total_duration_seconds": transcript_response.total_duration,
-                    "total_duration_formatted": format_timestamp(transcript_response.total_duration),
-                    "total_words": total_words,
-                    "total_entries": total_entries,
-                    "average_words_per_entry": round(avg_words_per_entry, 2),
-                    "estimated_reading_time_minutes": round(total_words / 200, 1)  # Assuming 200 WPM
+                    "duration": {
+                        "total_seconds": transcript_response.total_duration,
+                        "formatted": format_timestamp(transcript_response.total_duration)
+                    },
+                    "content": {
+                        "total_words": total_words,
+                        "total_segments": total_entries,
+                        "average_words_per_segment": round(avg_words_per_entry, 1),
+                        "words_per_minute": round(words_per_minute, 1),
+                        "speaking_pace": pace_description
+                    },
+                    "engagement": {
+                        "questions_asked": question_count,
+                        "exclamations": exclamation_count,
+                        "filler_words_detected": filler_count,
+                        "filler_percentage": round(filler_percentage, 1)
+                    },
+                    "segments": {
+                        "average_length_words": round(avg_segment_length, 1),
+                        "longest_segment_words": max_segment_length,
+                        "shortest_segment_words": min_segment_length
+                    },
+                    "reading_time": {
+                        "estimated_minutes_slow": round(total_words / 150, 1),
+                        "estimated_minutes_normal": round(total_words / 200, 1),
+                        "estimated_minutes_fast": round(total_words / 250, 1)
+                    }
                 },
-                "sample_text": sample_text
+                "content_analysis": {
+                    "top_words": [{"word": word, "frequency": freq} for word, freq in top_words],
+                    "content_indicators": {
+                        "has_questions": question_count > 0,
+                        "high_energy": exclamation_count > total_words * 0.01,  # More than 1% exclamations
+                        "conversational": filler_percentage > 2.0,  # More than 2% filler words
+                        "formal_speech": filler_percentage < 0.5   # Less than 0.5% filler words
+                    }
+                },
+                "sample_content": enhanced_sample
             }
             
         except Exception as e:
