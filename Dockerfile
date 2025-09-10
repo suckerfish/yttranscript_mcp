@@ -18,11 +18,11 @@ RUN pip install --no-cache-dir uv==0.8.15
 COPY pyproject.toml ./
 COPY uv.lock* ./
 
+# Copy application code (needed for package installation)
+COPY src/ ./src/
+
 # Install dependencies in a separate layer (cached unless dependencies change)
 RUN uv pip install --system --no-cache .
-
-# Copy application code (this layer changes most frequently)
-COPY src/ ./src/
 
 # Create non-root user for security
 RUN adduser --disabled-password --gecos '' --shell /bin/bash appuser \
