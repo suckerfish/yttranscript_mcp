@@ -16,6 +16,7 @@ RUN pip install --no-cache-dir uv==0.8.15
 
 # Copy dependency files first (for better caching)
 COPY pyproject.toml ./
+COPY README.md ./
 COPY uv.lock* ./
 
 # Copy application code (needed for package installation)
