@@ -1,10 +1,6 @@
 services:
   yttranscript-mcp:
-    build: 
-      context: .
-      dockerfile: Dockerfile
-    image: yttranscript-mcp:latest
-    pull_policy: build
+    image: ghcr.io/suckerfish/yttranscript_mcp:latest
     container_name: yttranscript-mcp
     environment:
       - YT_TRANSCRIPT_SERVER_HOST=0.0.0.0
@@ -16,14 +12,10 @@ services:
       - "${PORT:-8081}:8080"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-X", "POST", "http://localhost:8080/mcp/", 
-             "-H", "Content-Type: application/json",
-             "-H", "Accept: application/json, text/event-stream",
-             "-d", '{"jsonrpc":"2.0","method":"tools/call","id":"health","params":{"name":"get_available_languages","arguments":{"video_id":"9bZkp7q19f0"}}}']
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-    # Resource limits optimized for 512MB VPS
     deploy:
       resources:
         limits:
@@ -32,4 +24,3 @@ services:
         reservations:
           cpus: '0.1'
           memory: 64M
-
