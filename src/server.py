@@ -140,8 +140,8 @@ def main():
         mcp.run()
 
 
-# For uvicorn compatibility (streamable HTTP)
-app = mcp.http_app()
+# For uvicorn compatibility (streamable HTTP with stateless mode)
+app = mcp.http_app(stateless_http=True)
 
 
 if __name__ == "__main__":
