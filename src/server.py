@@ -23,11 +23,10 @@ except ImportError:
     from tools.transcript_tools import register_transcript_tools
 
 
-# Create the MCP server instance with stateless HTTP for reliable deployment
+# Create the MCP server instance
 mcp = FastMCP(
     name="YouTube Transcript Server",
     version="0.1.0",
-    stateless_http=True  # Required for reliable remote deployment
 )
 
 # Register all transcript tools
@@ -51,6 +50,34 @@ def get_server_info() -> dict:
         "transport": "streamable_http",
         "api_version": "2024-11-05"
     }
+
+
+@mcp.prompt()
+def summarize_video(video_id: str, language_code: str = "en") -> str:
+    """Generate a prompt to summarize a YouTube video transcript."""
+    return (
+        f"Please fetch the transcript for YouTube video '{video_id}' "
+        f"(language: {language_code}) using the get_transcript tool, "
+        f"then provide a comprehensive summary including:\n"
+        f"- Main topics and key points\n"
+        f"- Important quotes or statements\n"
+        f"- Overall tone and style of the content\n"
+        f"- A brief one-paragraph summary"
+    )
+
+
+@mcp.prompt()
+def search_topic_in_video(video_id: str, topic: str) -> str:
+    """Generate a prompt to search for a specific topic within a YouTube video."""
+    return (
+        f"Please search the transcript of YouTube video '{video_id}' "
+        f"for references to '{topic}' using the search_transcript tool, "
+        f"then analyze the results:\n"
+        f"- List all relevant mentions with timestamps\n"
+        f"- Summarize what is said about '{topic}'\n"
+        f"- Note the context around each mention\n"
+        f"- Provide an overall assessment of how '{topic}' is covered"
+    )
 
 
 # Add health check endpoint for production deployment
@@ -105,7 +132,8 @@ def main():
         mcp.run(
             transport="streamable-http",
             host=args.host,
-            port=args.port
+            port=args.port,
+            stateless_http=True
         )
     else:
         # Default STDIO for local testing
