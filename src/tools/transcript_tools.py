@@ -72,6 +72,18 @@ def _cache_set(key: Tuple[str, Optional[str]], response: TranscriptResponse) -> 
     _transcript_cache[key] = (response, now)
 
 
+# Null context shim for when MetaMCP (or other clients) don't inject Context
+class _NullContext:
+    """No-op stand-in for fastmcp.Context when context is not injected."""
+    async def info(self, msg: str) -> None: pass
+    async def warning(self, msg: str) -> None: pass
+    async def error(self, msg: str) -> None: pass
+    async def debug(self, msg: str) -> None: pass
+    async def report_progress(self, current: int, total: int, message: str = "") -> None: pass
+
+_null_ctx = _NullContext()
+
+
 # Retry settings for yt-dlp subprocess
 _MAX_RETRIES = 2
 _RETRY_DELAY_SECONDS = 2
@@ -404,6 +416,7 @@ async def get_transcript_internal(
     ctx: Optional[Context] = None
 ) -> TranscriptResponse:
     """Internal function to get transcript data."""
+    ctx = ctx or _null_ctx
     try:
         # Extract video ID if URL was provided
         clean_video_id = extract_video_id(video_id)
@@ -422,12 +435,10 @@ async def get_transcript_internal(
         cached = _cache_get(cache_key)
 
         if cached is not None:
-            if ctx:
-                await ctx.info(f"Using cached transcript for {request.video_id}")
+            await ctx.info(f"Using cached transcript for {request.video_id}")
             entries = cached.transcript
         else:
-            if ctx:
-                await ctx.info(f"Fetching transcript for video {request.video_id}...")
+            await ctx.info(f"Fetching transcript for video {request.video_id}...")
 
             # Fetch subtitle content using yt-dlp CLI
             entries, selected_lang, language_name, is_generated = await fetch_subtitle_content(
@@ -454,14 +465,13 @@ async def get_transcript_internal(
                 word_count=word_count
             )
             _cache_set(cache_key, full_response)
-            if ctx:
-                await ctx.info(f"Cached transcript for {request.video_id} ({len(entries)} entries)")
+            await ctx.info(f"Cached transcript for {request.video_id} ({len(entries)} entries)")
             cached = full_response
 
         # Apply time filtering if specified (use the validated values from the request model)
         if request.start_time is not None or request.end_time is not None:
             entries = filter_transcript_by_time(entries, request.start_time, request.end_time)
-            if ctx and len(entries) < len(cached.transcript):
+            if len(entries) < len(cached.transcript):
                 await ctx.info(f"Filtered to {len(entries)} entries by time range")
 
         # Calculate total duration and word count
@@ -521,6 +531,7 @@ def register_transcript_tools(mcp):
         Returns:
             Complete transcript data with metadata
         """
+        ctx = ctx or _null_ctx
         await ctx.report_progress(0, 3, "Starting transcript fetch")
 
         await ctx.info(f"Fetching transcript for video: {video_id}")
@@ -556,6 +567,7 @@ def register_transcript_tools(mcp):
         Returns:
             Search results with context and timestamps
         """
+        ctx = ctx or _null_ctx
         try:
             # Extract video ID if URL was provided
             clean_video_id = extract_video_id(video_id)
@@ -646,6 +658,7 @@ def register_transcript_tools(mcp):
         Returns:
             List of available languages with metadata
         """
+        ctx = ctx or _null_ctx
         try:
             # Extract video ID if URL was provided
             clean_video_id = extract_video_id(video_id)
@@ -713,6 +726,7 @@ def register_transcript_tools(mcp):
         Returns:
             Summary with statistics and sample text
         """
+        ctx = ctx or _null_ctx
         try:
             await ctx.report_progress(0, 4, "Starting summary generation")
 
