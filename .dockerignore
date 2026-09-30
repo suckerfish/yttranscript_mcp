@@ -87,7 +87,6 @@ temp/
 .nox/
 
 # Project specific
-requirements-docker.txt
 .claude/
 
 # GitHub

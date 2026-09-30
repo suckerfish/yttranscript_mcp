@@ -1,10 +1,10 @@
 # YouTube Transcript MCP Server
 
-A **production-ready** Model Context Protocol (MCP) server that provides YouTube transcript fetching capabilities using **yt-dlp CLI** for reliable subtitle extraction. Bypasses YouTube's rate limiting through CLI-based implementation.
+A **production-ready** Model Context Protocol (MCP) server that provides YouTube transcript fetching capabilities using **yt-dlp CLI** for reliable subtitle extraction. Uses browser impersonation and a JS runtime to reduce YouTube rate limiting.
 
 ## Status: Production Ready
 
-- **CLI-Based:** Uses yt-dlp subprocess to avoid HTTP rate limiting
+- **CLI-Based:** Uses yt-dlp subprocess with browser impersonation to reduce HTTP 429 rate limiting
 - **FastMCP 2.14.5:** Tool annotations, context logging, progress reporting, prompt templates
 - **GHCR CI/CD:** Multi-arch Docker images (amd64/arm64) built on every push
 - **Universal Compatibility:** Time parameters work across all MCP clients
@@ -133,7 +133,7 @@ The `get_transcript_summary` tool provides:
 - **Reading time estimates** at multiple speeds
 
 ### CLI Implementation Benefits
-- **No rate limiting** - bypasses YouTube's HTTP restrictions
+- **Fewer rate limits** - browser impersonation, a JS runtime, and backoff retries on HTTP 429
 - **Reliable extraction** - uses yt-dlp's robust parsing
 - **Automatic retries** - backoff on timeouts and transient errors
 - **Format flexibility** - handles VTT, JSON3, and other subtitle formats

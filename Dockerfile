@@ -8,6 +8,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
+# JS runtime for yt-dlp YouTube extraction (multi-arch image)
+COPY --from=denoland/deno:bin /deno /usr/local/bin/deno
+
 # Set working directory
 WORKDIR /app
 

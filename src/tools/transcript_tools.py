@@ -6,6 +6,7 @@ import subprocess
 import tempfile
 import os
 import asyncio
+import logging
 import time
 from typing import List, Optional, Dict, Any, Tuple, Union
 from fastmcp import Context
@@ -84,9 +85,12 @@ class _NullContext:
 _null_ctx = _NullContext()
 
 
-# Retry settings for yt-dlp subprocess
-_MAX_RETRIES = 2
-_RETRY_DELAY_SECONDS = 2
+logger = logging.getLogger(__name__)
+
+# Retry settings for yt-dlp subprocess.
+# A YouTube 429 throttle lasts longer than a few seconds, so rate limits get a longer backoff.
+_RATE_LIMIT_DELAYS_SECONDS = (5, 15, 30)
+_TRANSIENT_DELAYS_SECONDS = (2, 4)
 
 # Tool annotations: all tools are read-only
 _read_only_annotations = ToolAnnotations(
@@ -338,6 +342,7 @@ async def fetch_subtitle_content_impl(video_id: str, language_code: Union[str, N
             if process.returncode != 0:
                 error_msg = stderr.decode('utf-8') if stderr else 'Unknown error'
                 if 'HTTP Error 429' in error_msg:
+                    logger.warning("yt-dlp HTTP 429 for video %s: %s", video_id, error_msg.strip()[-300:])
                     raise ToolError("Rate limited by YouTube. Please try again later.")
                 elif 'No subtitles' in error_msg or 'Unable to download' in error_msg:
                     raise ToolError(f"No subtitles available for video {video_id}")
@@ -390,20 +395,26 @@ async def fetch_subtitle_content(video_id: str, language_code: Union[str, None] 
     Returns:
         Tuple of (entries, language_code, language_name, is_generated)
     """
-    last_error = None
-    for attempt in range(_MAX_RETRIES + 1):
+    rate_limit_attempts = 0
+    transient_attempts = 0
+    while True:
         try:
             return await fetch_subtitle_content_impl(video_id, language_code)
         except ToolError as e:
             error_msg = str(e)
-            # Only retry on timeouts and transient errors, not on permanent failures
-            is_retryable = any(s in error_msg for s in ("timed out", "Rate limited", "HTTP Error 5"))
-            if is_retryable and attempt < _MAX_RETRIES:
-                last_error = e
-                await asyncio.sleep(_RETRY_DELAY_SECONDS * (attempt + 1))
-                continue
-            raise
-    raise last_error  # unreachable but satisfies type checker
+            # Only retry on rate limits, timeouts and transient errors, not on permanent failures
+            if "Rate limited" in error_msg and rate_limit_attempts < len(_RATE_LIMIT_DELAYS_SECONDS):
+                delay = _RATE_LIMIT_DELAYS_SECONDS[rate_limit_attempts]
+                rate_limit_attempts += 1
+            elif any(s in error_msg for s in ("timed out", "HTTP Error 5")) and transient_attempts < len(_TRANSIENT_DELAYS_SECONDS):
+                delay = _TRANSIENT_DELAYS_SECONDS[transient_attempts]
+                transient_attempts += 1
+            else:
+                if "Rate limited" in error_msg:
+                    logger.error("Giving up on video %s after %d rate-limit retries", video_id, rate_limit_attempts)
+                raise
+            logger.warning("Retrying video %s in %ds: %s", video_id, delay, error_msg)
+            await asyncio.sleep(delay)
 
 
 

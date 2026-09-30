@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 This is a **production-ready** YouTube Transcript MCP Server that fetches transcripts from YouTube videos using **yt-dlp CLI** for reliable subtitle extraction. It provides AI systems with the ability to extract, search, and analyze YouTube video transcripts through the Model Context Protocol (MCP).
 
-**Status:** Fully functional with CLI-based implementation that bypasses YouTube's rate limiting.
+**Status:** Fully functional. Uses the yt-dlp CLI with browser impersonation (`curl_cffi`) and a JS runtime (deno) to reduce YouTube 429 rate limiting. It does not bypass it.
 
 ## Quick Commands
 
@@ -72,7 +72,7 @@ All tools are tagged `read` with `ToolAnnotations(readOnlyHint=True)`.
 ## Key Features
 
 - **Universal MCP Client Compatibility**: Time parameters accept integers, floats, strings, or nulls
-- **CLI-Based Implementation**: Uses yt-dlp subprocess to avoid rate limiting
+- **CLI-Based Implementation**: Uses yt-dlp subprocess with `curl_cffi` impersonation and deno; retries 429s with 5/15/30 s backoff
 - **Multi-Language Support**: 100+ languages with auto-generated and manual transcripts
 - **Advanced Analytics**: Speaking pace, filler words, content analysis, engagement metrics
 - **Dual Transport**: Both STDIO and HTTP transport modes (stateless HTTP for production)
