@@ -18,6 +18,8 @@ try:
 except ImportError:
     raise ImportError("yt-dlp is required. Install with: uv add yt-dlp")
 
+from youtube_transcript_api import YouTubeTranscriptApi
+
 # Handle both direct execution and module imports
 try:
     from ..models.transcript import (
@@ -89,7 +91,9 @@ logger = logging.getLogger(__name__)
 
 # Retry settings for yt-dlp subprocess.
 # A YouTube 429 throttle lasts longer than a few seconds, so rate limits get a longer backoff.
-_RATE_LIMIT_DELAYS_SECONDS = (5, 15, 30)
+# Keep the total retry time under the ~60 s MCP client request timeout.
+_RATE_LIMIT_DELAYS_SECONDS = (5, 15)
+_TRANSCRIPT_API_TIMEOUT_SECONDS = 20
 _TRANSIENT_DELAYS_SECONDS = (2, 4)
 
 # Tool annotations: all tools are read-only
@@ -337,7 +341,12 @@ async def fetch_subtitle_content_impl(video_id: str, language_code: Union[str, N
                 cwd=temp_dir
             )
 
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
+            try:
+                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
+            except asyncio.TimeoutError:
+                process.kill()
+                await process.wait()
+                raise
 
             if process.returncode != 0:
                 error_msg = stderr.decode('utf-8') if stderr else 'Unknown error'
@@ -388,13 +397,48 @@ async def fetch_subtitle_content_impl(video_id: str, language_code: Union[str, N
         raise ToolError(f"Failed to fetch subtitles via CLI: {str(e)}")
 
 
-async def fetch_subtitle_content(video_id: str, language_code: Union[str, None] = None) -> Tuple[List[TranscriptEntry], str, str, bool]:
+def fetch_transcript_api_impl(video_id: str, language_code: Union[str, None] = None) -> Tuple[List[TranscriptEntry], str, str, bool]:
     """
-    Fetch subtitle content using yt-dlp CLI with retry on timeout/transient errors.
+    Fetch a transcript with youtube-transcript-api (InnerTube transcript endpoint).
+    yt-dlp's timedtext download returns 429 without a PO token; this endpoint does not need one.
 
     Returns:
         Tuple of (entries, language_code, language_name, is_generated)
     """
+    transcript_list = YouTubeTranscriptApi().list(video_id)
+    if language_code:
+        transcript = transcript_list.find_transcript([language_code])
+    else:
+        try:
+            transcript = transcript_list.find_transcript(['en'])
+        except Exception:
+            transcript = next(iter(transcript_list))
+    fetched = transcript.fetch()
+    entries = [
+        TranscriptEntry(text=s.text, start=s.start, duration=s.duration)
+        for s in fetched.snippets
+        if s.text.strip()
+    ]
+    return entries, fetched.language_code, fetched.language, fetched.is_generated
+
+
+async def fetch_subtitle_content(video_id: str, language_code: Union[str, None] = None) -> Tuple[List[TranscriptEntry], str, str, bool]:
+    """
+    Fetch subtitle content with youtube-transcript-api, then fall back to the
+    yt-dlp CLI with retry on timeout/transient errors.
+
+    Returns:
+        Tuple of (entries, language_code, language_name, is_generated)
+    """
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(fetch_transcript_api_impl, video_id, language_code),
+            timeout=_TRANSCRIPT_API_TIMEOUT_SECONDS,
+        )
+    except Exception as e:
+        logger.warning("youtube-transcript-api failed for video %s, falling back to yt-dlp: %s: %s",
+                       video_id, type(e).__name__, str(e).strip()[:300])
+
     rate_limit_attempts = 0
     transient_attempts = 0
     while True:
